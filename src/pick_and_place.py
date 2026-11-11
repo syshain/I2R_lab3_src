@@ -43,7 +43,7 @@ from ui_display import (load_camera_intrinsics, load_calibration_results,
 from vision import one_shot_estimate
 
 
-N_PER_SEG = 10              # planner samples per segment
+N_PER_SEG = 25              # planner samples per segment
 TRANSIT_SPEED = 30          # % speed for planned transits
 LIFT_SPEED = 20             # % speed for the post-pick lift and retreat
 
@@ -430,7 +430,7 @@ def run():
         progress("Transfer complete. Record both one-shot estimates, the")
         progress("seat height and the path reports for the handout.")
     finally:
-        save_path_plots(recorder)
+        save_path_plots(recorder, robot_sn=robot.robot_sn(arm))
         robot.stop_gripper(arm)
         robot.disable_arm(arm)
         cap.release()

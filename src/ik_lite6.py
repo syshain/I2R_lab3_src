@@ -257,7 +257,12 @@ if __name__ == '__main__':
             pos_err_mm = np.linalg.norm(T_v[:3, 3] - T_t[:3, 3]) * 1000.0
             ang_err_deg = np.degrees(np.linalg.norm(
                 rotation_log_map(T_v[:3, :3] @ T_t[:3, :3].T)))
-            all_ok &= bool(ok and pos_err_mm < 0.01)
+            # The bar matches what solve_ik guarantees, no more: its
+            # convergence flag is RESIDUAL_TOL = 1e-4 on the [m; rad]
+            # residual, which at zero orientation error allows up to
+            # ~0.1 mm of position error, and LM stops the first moment
+            # the residual dips under the tolerance.
+            all_ok &= bool(ok and pos_err_mm < 0.1)
             heading(name)
             field('converged', 'yes' if ok else 'NO')
             field('pos err', '%.4f mm' % pos_err_mm)

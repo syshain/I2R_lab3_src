@@ -37,12 +37,43 @@ def connect_arm(ip=ROBOT_IP):
     return arm
 
 
+def robot_sn(arm):
+    """The robot's serial number, so saved data can be traced back to its bench.
+
+    Returns 'not recorded' rather than raising: a failed SN read must never
+    stop a capture from being saved."""
+    try:
+        code, sn = arm.get_robot_sn()
+        if code == 0 and sn:
+            return str(sn)
+    except Exception:
+        pass
+    return 'not recorded'
+
+
 def read_joints_rad(arm):
     """Current joint angles as a (6,) array in radians."""
     code, angles_deg = arm.get_servo_angle()
     if code != 0:
         raise RuntimeError('joint read failed (code %d)' % code)
     return np.deg2rad(np.asarray(angles_deg[:6], dtype=float))
+
+
+def read_flange_pose_aa(arm):
+    """The flange pose as the CONTROLLER reports it, in the servo wire format.
+
+    Returns [x, y, z] in millimetres + [wx, wy, wz] as an axis-angle vector
+    in radians — exactly what stream_flange_pose takes. Used to prime the
+    servo stream: sending the controller's own pose once before the first
+    planned tick makes that tick a genuine small step from where the
+    controller really is, instead of a max-speed dash from wherever it
+    disagrees with our forward kinematics.
+    """
+
+    code, pose = arm.get_position_aa(is_radian=True)
+    if code != 0:
+        raise RuntimeError('flange pose read failed (code %d)' % code)
+    return [float(v) for v in pose[:6]]
 
 
 def within_joint_limits(q_deg):

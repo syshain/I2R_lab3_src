@@ -12,6 +12,7 @@ import numpy as np
 
 from ik_lite6 import rotation_log_map, solve_ik
 from lab_config import (GRIPPER_SETTLE_S, KEY_SPEED_PCT, KEY_STEP_MM,
+                        STREAM_DRAIN_S, STREAM_SETTLE_TIMEOUT_S,
                         STREAM_TICK_S, STREAM_SPEED_MM_S)
 from motion import flange_pose_base
 from planners import interpolate_pose
@@ -208,15 +209,35 @@ def streamed_path(arm, cap, K, dist_coeffs, zeta, T_ee_cam, tool_d_m, q_rad,
                 else ' — hold [g] to stream'))
 
     arm_lock = threading.Lock()
-    state = {'i': 0, 'held': auto, 'run': True, 'error': None, 'done': False}
+    state = {'i': 0, 'held': auto, 'run': True, 'error': None, 'done': False,
+             'drained': False}
 
     def _mvpose(T):
         """Wire format for set_servo_cartesian_aa: [x y z] mm + axis-angle rad."""
         return [T[0, 3] * 1000.0, T[1, 3] * 1000.0, T[2, 3] * 1000.0] \
             + list(rotation_log_map(T[:3, :3]))
 
+    # Prime the stream: send the pose the CONTROLLER is actually at before
+    # the first planned tick. Servo commands have no speed ramp (the SDK's
+    # speed argument is reserved; the controller dashes to each new target
+    # at full speed), so without this the first tick is a max-speed dash
+    # from wherever the controller sits relative to our forward
+    # kinematics — the jolt at the start of every streamed phase.
+    try:
+        prime = robot.read_flange_pose_aa(arm)
+    except Exception as exc:
+        progress('! could not read the flange pose to prime the stream (%s)'
+                 ' — leaving servo mode' % exc)
+        robot.set_control_mode(arm, robot.POSITION_MODE)
+        return q_rad, True, gripping
+    if robot.stream_flange_pose(arm, prime, speed=speed) != 0:
+        progress('! priming tick rejected — leaving servo mode')
+        robot.set_control_mode(arm, robot.POSITION_MODE)
+        return q_rad, True, gripping
+
     def _stream():
         next_t = time.perf_counter()
+        drain_deadline = None
         while state['run']:
             next_t += STREAM_TICK_S
             if state['held'] and state['i'] < len(plan):
@@ -236,6 +257,32 @@ def streamed_path(arm, cap, K, dist_coeffs, zeta, T_ee_cam, tool_d_m, q_rad,
                                       % (state['i'] + 1, len(plan), code))
                     state['run'] = False
                     break
+            elif state['i'] >= len(plan):
+                # Plan exhausted. The controller does NOT queue servo
+                # commands: it chases only the last pose received and
+                # halts the moment the stream stops, so going silent here
+                # would strand the arm short of the final pose. Keep
+                # re-sending the final pose for STREAM_DRAIN_S so the
+                # controller actually arrives. The drain runs with [g]
+                # released too — the motion was already fully commanded,
+                # and the dead-man gate still kills any NEW motion
+                # instantly — but never past the deadline.
+                if drain_deadline is None:
+                    drain_deadline = time.perf_counter() + STREAM_DRAIN_S
+                with arm_lock:
+                    if not state['run']:
+                        break
+                    code = robot.stream_flange_pose(
+                        arm, _mvpose(fine[-1]), speed=speed)
+                if code != 0:
+                    state['error'] = ('drain tick rejected at %d/%d '
+                                      '(SDK code %d)'
+                                      % (state['i'], len(plan), code))
+                    state['run'] = False
+                    break
+                if time.perf_counter() >= drain_deadline:
+                    state['drained'] = True
+                    break
             delay = next_t - time.perf_counter()
             if delay > 0.0:
                 time.sleep(delay)
@@ -248,9 +295,22 @@ def streamed_path(arm, cap, K, dist_coeffs, zeta, T_ee_cam, tool_d_m, q_rad,
     aborted = False
     # The phase stays open after the last tick when [SPACE] is live: the
     # cup reaches the block on the final tick, and ending the loop on
-    # plan completion would race the [SPACE] keypress and lose it.
+    # plan completion would race the [SPACE] keypress and lose it. It
+    # also stays open until the drain has finished re-sending the final
+    # pose (state['drained']), so the controller is actually at the
+    # final pose before mode 0 is restored.
     while state['run'] and not aborted and not state['done'] \
-            and (state['i'] < len(plan) or allow_gripper):
+            and (state['i'] < len(plan) or not state['drained']
+                 or allow_gripper):
+        # Refresh from the controller every frame: the streamed plan runs
+        # ahead of q_rad otherwise, and the tip marker and the tip->block
+        # numbers would sit at the phase's starting pose for the whole
+        # flight. Under arm_lock so the read never races the stream thread.
+        with arm_lock:
+            try:
+                q_rad = robot.read_joints_rad(arm)
+            except Exception:
+                pass
         T_flange = flange_pose_base(q_rad, zeta)
         p_tip = tip_position(T_flange, tool_d_m)
         T_cam = T_flange @ T_ee_cam
@@ -313,7 +373,23 @@ def streamed_path(arm, cap, K, dist_coeffs, zeta, T_ee_cam, tool_d_m, q_rad,
     state['held'] = False
     state['run'] = False
     thread.join()
-    time.sleep(0.2)          # let the last ticks reach the controller
+    # Let the last ticks reach the controller, then wait for the arm to
+    # actually STOP before the joints are read: the controller keeps
+    # blending after the final tick, so joints read mid-motion would plan
+    # the next phase from a pose the arm has already left (the jolt and
+    # the offset). Bounded by STREAM_SETTLE_TIMEOUT_S so a controller that
+    # never reports idle cannot hang the phase. Same moving test as
+    # connect_arm: is_moving, or controller state 1 (in motion).
+    time.sleep(0.2)
+    settle_deadline = time.perf_counter() + STREAM_SETTLE_TIMEOUT_S
+    while time.perf_counter() < settle_deadline:
+        try:
+            stopped = not arm.get_is_moving() and arm.get_state() != 1
+        except Exception:
+            stopped = True
+        if stopped:
+            break
+        time.sleep(0.05)
     if state['error']:
         progress('! %s' % state['error'])
         try:

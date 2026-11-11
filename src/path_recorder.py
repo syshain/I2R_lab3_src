@@ -43,11 +43,12 @@ class PathRecorder:
         return any(len(s['points_mm']) >= 1 for s in self.segments)
 
 
-def save_path_plots(recorder, out_dir=TRAJECTORY_DIR):
+def save_path_plots(recorder, out_dir=TRAJECTORY_DIR, robot_sn=None):
     """3D plot (+ CSV) of every recorded segment into out_dir.
 
     Returns the PNG path, or None when there is nothing to plot. Vias the
-    student entered in the console are drawn as larger open dots.
+    student entered in the console are drawn as larger open dots. When
+    robot_sn is given it is written as a leading comment line of the CSV.
     """
     if not recorder.has_data():
         return None
@@ -93,6 +94,8 @@ def save_path_plots(recorder, out_dir=TRAJECTORY_DIR):
 
     csv_path = png_path[:-4] + '.csv'
     with open(csv_path, 'w', newline='') as f:
+        if robot_sn:
+            f.write('# robot_sn: %s\n' % robot_sn)
         f.write('segment,index,x_mm,y_mm,z_mm,is_via\n')
         for seg in recorder.segments:
             for j, p in enumerate(seg['points_mm']):

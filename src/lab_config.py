@@ -13,12 +13,26 @@ CAMERA_INDEX = int(os.environ.get('CAMERA_INDEX', '4'))   # wrist USB camera
 # Solver / joint box (degrees). These are the bench/controller limits this
 # rig actually enforces, which are narrower than the Lite 6 manual's; Lab 2
 # solved against them too. ik_lite6.py and robot.py both read these.
-JOINT_LIMITS_DEG = np.array([[80.0, 270.0],
-                             [-150.0, 150.0],
-                             [-3.5, 300.0],
-                             [-360.0, 360.0],
-                             [-124.0, 124.0],
-                             [-180.0, 180.0]])
+# Env-overridable like ROBOT_IP/CAMERA_INDEX so a different bench needs no
+# source edit: JOINT_LIMITS_DEG="lo1,hi1,lo2,hi2,..." — 12 numbers, row-major
+# (J1 lower, J1 upper, J2 lower, ...). A malformed override is refused loudly
+# rather than silently falling back: these limits guard the arm.
+_JOINT_LIMITS_DEFAULT = np.array([[80.0, 270.0],
+                                  [-150.0, 150.0],
+                                  [-3.5, 300.0],
+                                  [-360.0, 360.0],
+                                  [-124.0, 124.0],
+                                  [-180.0, 180.0]])
+_jl_env = os.environ.get('JOINT_LIMITS_DEG')
+if _jl_env:
+    _jl_vals = [float(v) for v in _jl_env.split(',')]
+    if len(_jl_vals) != 12:
+        raise ValueError('JOINT_LIMITS_DEG env override must be 12 comma-'
+                         'separated numbers (6 x [lower, upper]), got %d'
+                         % len(_jl_vals))
+    JOINT_LIMITS_DEG = np.array(_jl_vals, dtype=float).reshape(6, 2)
+else:
+    JOINT_LIMITS_DEG = _JOINT_LIMITS_DEFAULT
 
 
 IK_FD_EPS_RAD = 1e-5        # centred-difference step for the IK Jacobian, radians
@@ -38,9 +52,22 @@ KEY_STEP_MM = 3.0
 KEY_SPEED_PCT = 10
 GRIPPER_SETTLE_S = 2.0      # vacuum build-up wait after [SPACE] engages it,
                             # before any further motion (pick_and_place.py)
-STREAM_TICK_S = 0.02        # servo-stream tick period (s); mode-1 executor
+STREAM_TICK_S = 0.01        # servo-stream tick period (s), 100 Hz: the
+                            # controller never queues servo commands and runs
+                            # each target at its own maximum speed, and
+                            # UFACTORY recommends a 50-200 Hz stream (below
+                            # 50 Hz the motion is discontinuous)
 STREAM_SPEED_MM_S = 40.0    # commanded cup speed while streaming (MM/s)
 STREAM_DESCENT_MM_S = 20.0  # streamed cup speed for contact phases (MM/s)
+STREAM_DRAIN_S = 0.5        # after the plan is exhausted the stream keeps
+                            # re-sending the final pose this long, so the
+                            # controller (which chases only the latest
+                            # received target and halts when the stream
+                            # stops) actually arrives instead of halting
+                            # short of it (key_control.streamed_path)
+STREAM_SETTLE_TIMEOUT_S = 5.0   # after the drain, streamed_path polls until
+                                # the controller reports the arm stopped (at
+                                # most this long) before the joints are read
 MIN_CONFIDENCE = 0.35
 MIN_AREA_PX = 300
 MAX_AREA_FRAC = 0.5
