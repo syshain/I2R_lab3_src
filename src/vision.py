@@ -12,29 +12,13 @@ _YAW_SCAN_DEG = np.arange(0.0, 90.0, 15.0)   # coarse seeds; square face -> yaw 
 
 
 def rgb_color_mask(frame_bgr, color):
-    """Binary mask (0/255, uint8) of pixels matching one colour.
-
-    The frame is BGR: unpack channels in b, g, r order.  A pixel is
-    white when all THREE channel values lie inside one band of
-    COLOR_THRESHOLDS[color] (with several bands, any band counts).
-    Hint: write each channel test as a boolean array and combine
-    them with & 
-    Make sure you give every test its own brackets to ensure correct operation priority 
-    """
-
-    mask = <TO_FILL>  # Initialize mask as an empty, all-black frame of the right size
-    band = COLOR_THRESHOLDS[color][0]  # Each of the BGR is given only one box from the sliders/config
-    b, g, r =  # Extract b g r arrays from frame_bgr
-    # OpenCV frames are BGR, not RGB (historical carry over: Windows BMP byte order)
-    """
-    Use the color boxes in band to threshold the colors. HINT: See lab_config for the keys defining the boxes
-    Example: band['b_lo'] retrieves the lower bound for blue defined from config/live sliders
-    CAUTION: Python loops are extremely slow and unsuitable for live feeds. In practice, opencv is commonly used since it wraps around C++
-    Here, use bitwise operators (>=, <= for comparison, & to combine) 
-    """
-    in_band = <TO_FILL> # Use the extracted b g r arrays and color bands to build the thresholded frame  
-    mask |= in_band.astype(np.uint8) * 255 # in_band being a logical array, we convert to a uint8 BW frame for findContours``
-
+    """RGB mask for one colour, OR-ing the bands in COLOR_THRESHOLDS[color]."""
+    mask = None
+    for band in COLOR_THRESHOLDS[color]:
+        lo = np.array([band['b_lo'], band['g_lo'], band['r_lo']], np.uint8)
+        hi = np.array([band['b_hi'], band['g_hi'], band['r_hi']], np.uint8)
+        m = cv2.inRange(frame_bgr, lo, hi)
+        mask = m if mask is None else cv2.bitwise_or(mask, m)
     return mask
 
 
@@ -74,7 +58,10 @@ def detect_color_block(frame, color, K, dist_coeffs):
         return {'mask': mask}
     centroid, bbox, area, conf, rect, cnt = blob
     s_px = 0.5 * (rect[1][0] + rect[1][1])
-    depth_m = float(K[0, 0]) * (BLOCK_SIDE_MM / 1000.0) / max(s_px, 1e-9)
+    raise NotImplementedError(
+        "Task 3, step 6.5(b): set depth_m from Section 6.4's formula. The "
+        "focal length, the block's measured side in metres, and the mean of "
+        "the two sides of the minimum-area rectangle (s_px above).")
     return {'center_px': np.asarray(centroid, dtype=float),
             'bbox_px': bbox, 'rect': rect, 'contour': cnt,
             'depth_m': depth_m, 'confidence': float(conf), 'mask': mask}

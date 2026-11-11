@@ -57,7 +57,10 @@ def top_face_centre(marker_world, marker_id=TOP_MARKER_ID):
 
 def artifact_pose_in_base(q_rad, zeta, T_6_C, T_C_W):
     """CAPTURE 1 maths: T_0_A = T_0_6 @ T_6_C @ T_C_W (all 4x4, metres)."""
-    return flange_pose_base(q_rad, zeta) @ T_6_C @ T_C_W
+    raise NotImplementedError(
+        "Task 1, step 6.1(c): return the artifact pose in the base frame. "
+        "One chain and one line: forward kinematics at the joint readings, "
+        "then Laboratory 2's T_6_C, then the detection's T_C_A.")
 
 
 def top_face_plane(T_0_A, marker_world, marker_id=TOP_MARKER_ID):
@@ -185,8 +188,7 @@ def capture_artifact_pose(arm, cap, detector, zeta, T_6_C, p_top_A):
             capture = (q_rad, det['T_C_W'])
             frame_cap = frame.copy()
             T_0_A = artifact_pose_in_base(q_rad, zeta, T_6_C, det['T_C_W'])
-            _log_capture({'robot_sn': robot.robot_sn(arm),
-                          'q_rad': np.asarray(q_rad).tolist(),
+            _log_capture({'q_rad': np.asarray(q_rad).tolist(),
                           'T_C_W': det['T_C_W'].tolist(),
                           'T_0_A': T_0_A.tolist(),
                           'marker_ids': det['ids'],
@@ -328,9 +330,8 @@ def capture_touch(arm, zeta, T_0_A, p_top_A, n, p_face):
                  "  (need at least %d)" % MIN_TOUCHES if len(touches) < MIN_TOUCHES else "")]
         if touches:
             d_all = np.array([t['d_mm'] for t in touches])
-            # Sample std (n-1), matching the handout convention.
             info.append("d: mean %.2f mm   std %.2f mm   spread %.2f mm"
-                        % (d_all.mean(), d_all.std(ddof=1), d_all.max() - d_all.min()))
+                        % (d_all.mean(), d_all.std(), d_all.max() - d_all.min()))
         info.append("wrist tilt now: %.1f deg - any tilt is fine, avoid grazing" % tilt)
         info.append("flange-to-face-centre distance [mm]: %.0f"
                     % (np.linalg.norm(p_face - T_0_6[:3, 3]) * 1000.0))
@@ -378,13 +379,12 @@ def capture_touch(arm, zeta, T_0_A, p_top_A, n, p_face):
             return None
 
 
-def report_and_save(T_0_A, touches, p_top_A, T_6_C, capture, robot_sn='not recorded'):
+def report_and_save(T_0_A, touches, p_top_A, T_6_C, capture):
     """Solve d from the touches, build T_6_G and T_G_C, print the student-record."""
 
     d_mm = np.array([t['d_mm'] for t in touches])
     d = float(d_mm.mean()) / 1000.0
-    # Sample std (n-1), matching the handout convention.
-    d_std_mm = float(d_mm.std(ddof=1))
+    d_std_mm = float(d_mm.std())
     d_spread_mm = float(d_mm.max() - d_mm.min())
 
     T_6_G = np.eye(4)
@@ -434,7 +434,6 @@ def report_and_save(T_0_A, touches, p_top_A, T_6_C, capture, robot_sn='not recor
     progress("           touch closest to the face centre)")
 
     data = {
-        'robot_sn': robot_sn,
         'T_6_G': T_6_G,
         'T_G_C': T_G_C,
         'T_G_A': T_G_A,
@@ -493,8 +492,7 @@ def main():
             progress("Aborted - nothing saved.")
             return
 
-        report_and_save(T_0_A, touches, p_top_A, T_6_C, capture,
-                        robot_sn=robot.robot_sn(arm))
+        report_and_save(T_0_A, touches, p_top_A, T_6_C, capture)
     finally:
         cap.release()
         arm.disconnect()
