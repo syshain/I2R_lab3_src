@@ -8,7 +8,7 @@ import numpy as np
 
 # Hardware (env-overridable, same mechanism as Labs 1-2)
 ROBOT_IP = os.environ.get('ROBOT_IP', '192.168.1.158')
-CAMERA_INDEX = int(os.environ.get('CAMERA_INDEX', '4'))   # wrist USB camera
+CAMERA_INDEX = int(os.environ.get('CAMERA_INDEX', '0'))   # wrist USB camera
 
 # Solver / joint box (degrees). These are the bench/controller limits this
 # rig actually enforces, which are narrower than the Lite 6 manual's; Lab 2
@@ -36,6 +36,10 @@ else:
 
 
 IK_FD_EPS_RAD = 1e-5        # centred-difference step for the IK Jacobian, radians
+IK_JUMP_DEG = 10.0          # max joint change between consecutive fine-plan
+                            # steps; more reads as a wrist flip and the whole
+                            # move is rejected before anything moves
+                            # (key_control.py, _fine_plan)
 
 # Block geometry / workflow / detection
 BLOCK_SIDE_MM = 25.0

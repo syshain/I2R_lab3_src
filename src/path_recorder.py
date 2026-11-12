@@ -22,9 +22,12 @@ class PathRecorder:
     def __init__(self):
         self.segments = []          # [{'label', 'points_mm', 'vias_mm'}]
         self._current = None
+        self._pending_vias = []     # vias entered before their segment opens
 
     def start_segment(self, label):
-        self._current = {'label': label, 'points_mm': [], 'vias_mm': []}
+        self._current = {'label': label, 'points_mm': [],
+                         'vias_mm': self._pending_vias}
+        self._pending_vias = []
         self.segments.append(self._current)
 
     def add_tip(self, p_tip_m):
@@ -34,10 +37,16 @@ class PathRecorder:
                 np.asarray(p_tip_m, dtype=float) * 1000.0)
 
     def add_via(self, p_tip_m):
-        """Record a console-entered via point (m, base frame)."""
+        """Record a console-entered via point (m, base frame).
+
+        Vias are prompted before the transit segment opens, so they wait
+        in _pending_vias until the next start_segment() claims them.
+        """
+        p = np.asarray(p_tip_m, dtype=float) * 1000.0
         if self._current is not None:
-            self._current['vias_mm'].append(
-                np.asarray(p_tip_m, dtype=float) * 1000.0)
+            self._current['vias_mm'].append(p)
+        else:
+            self._pending_vias.append(p)
 
     def has_data(self):
         return any(len(s['points_mm']) >= 1 for s in self.segments)

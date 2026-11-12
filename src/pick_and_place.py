@@ -299,7 +299,10 @@ def do_transfer(arm, cap, K, dist, zeta, T_6_C, tool_d_m, color,
     # vacuum once the cup rests on the block.
     R_flange = flange_pose_base(q_rad, zeta)[:3, :3]
     T_touch = flange_for_tip(p_target, R_flange, tool_d_m)
-    T_touch[2, 3] = max(T_touch[2, 3], (TABLE_Z_MM + 2.0) / 1000.0)
+    # The floor protects the CUP TIP, not the flange: the tip sits tool_d
+    # below the flange along flange +z, so the flange floor is raised by it.
+    T_touch[2, 3] = max(T_touch[2, 3],
+                        (TABLE_Z_MM + 2.0) / 1000.0 + tool_d_m)
     print()
     heading("DESCENT — hold [g] until the cup rests on the block, then [SPACE]")
     q_rad, abrt, gripping = execute(q_rad, [T_touch], 'descent',
@@ -355,14 +358,16 @@ def do_transfer(arm, cap, K, dist, zeta, T_6_C, tool_d_m, color,
     # block rests on what is below it.
     R_flange = flange_pose_base(q_rad, zeta)[:3, :3]
     T_seat = flange_for_tip(p_dest_tip_m, R_flange, tool_d_m)
-    T_seat[2, 3] = max(T_seat[2, 3], (TABLE_Z_MM + 2.0) / 1000.0)
+    T_seat[2, 3] = max(T_seat[2, 3],
+                       (TABLE_Z_MM + 2.0) / 1000.0 + tool_d_m)  # tip, not flange
     print()
     heading("SEATING — hold [g] until the block rests on what is below it,"
             " then [SPACE]")
     q_rad, abrt, gripping = execute(q_rad, [T_seat], 'seating',
                                     KEY_SPEED_PCT, allow_gripper=True,
                                     gripping=gripping,
-                                    p_tip_target_m=p_dest_tip_m, color=color)
+                                    p_tip_target_m=p_dest_tip_m,
+                                    color=dest_block)   # readout vs the block below
     if abrt:
         robot.close_gripper(arm)
         return None, True

@@ -11,8 +11,8 @@ import time
 import numpy as np
 
 from ik_lite6 import rotation_log_map, solve_ik
-from lab_config import (GRIPPER_SETTLE_S, KEY_SPEED_PCT, KEY_STEP_MM,
-                        STREAM_DRAIN_S, STREAM_SETTLE_TIMEOUT_S,
+from lab_config import (GRIPPER_SETTLE_S, IK_JUMP_DEG, KEY_SPEED_PCT,
+                        KEY_STEP_MM, STREAM_DRAIN_S, STREAM_SETTLE_TIMEOUT_S,
                         STREAM_TICK_S, STREAM_SPEED_MM_S)
 from motion import flange_pose_base
 from planners import interpolate_pose
@@ -49,7 +49,9 @@ def _fine_plan(poses, q_rad, zeta, label, step_mm):
     On IK failure the error is printed, with how many fine poses were
     rejected by IK (the failed step and every step after it, which the
     plan drops), and (None, None) is returned; otherwise (fine_poses,
-    plan), with plan[i] the joints for fine_poses[i].
+    plan), with plan[i] the joints for fine_poses[i]. A joint jump beyond
+    IK_JUMP_DEG between consecutive steps (a wrist flip) rejects the whole
+    move the same way, before anything has moved.
     """
 
     fine = []
@@ -76,6 +78,14 @@ def _fine_plan(poses, q_rad, zeta, label, step_mm):
                             rotation_log_map(T_end[:3, :3] @ T[:3, :3].T))),
                         err, len(fine) - i))
             return None, None
+        if plan:
+            jump_deg = float(np.max(np.abs(np.degrees(q_sol - plan[-1]))))
+            if jump_deg > IK_JUMP_DEG:
+                progress("! joint jump %.1f deg at %s step %d/%d (wrist flip)"
+                         " — move rejected, nothing moved; %d fine pose(s)"
+                         " rejected"
+                         % (jump_deg, label, i + 1, len(fine), len(fine) - i))
+                return None, None
         plan.append(q_sol)
         q_chain = q_sol
     return fine, plan

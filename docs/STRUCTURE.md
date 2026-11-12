@@ -1,14 +1,16 @@
 # Lab 3 — Repository Structure
 
-Lab 3 is **vision-guided pick and place** in Python: the wrist camera locates a red and a
-green 25 mm block, the Lite 6 navigates its vacuum gripper over the green block using the
-Lab 1/2 calibration, picks it up under a keygate, and places it on the red block. Every
-autonomous motion is small and keygated; a human stays in the safety loop throughout.
+Lab 3 is **vision-guided pick and place** in Python: the wrist camera locates two 25 mm
+blocks (block 1 and block 2 — the code never names a colour), the Lite 6 navigates its
+vacuum gripper over block 1 using the Lab 1/2 calibration, picks it up under the dead-man
+gate, and places it on block 2. Every motion phase runs only while [g] is held (the
+automatic lift and retreat excepted); a human stays in the safety loop throughout.
 
 The module layout and the reporting grammar match Labs 1 and 2: `units.py`, `so3.py` and
-`reporting.py` are copies of the Lab 2 files, and `ik_lite6.py` / `fk_lite6.py` are the
-Lab 2 solvers ported to this lab's calibrated parameters. If you did Lab 2, every file
-here should look like a small delta from code you have already read.
+`reporting.py` are carried over from Lab 2, trimmed to this lab's needs, and
+`ik_lite6.py` / `fk_lite6.py` are the Lab 2 solvers ported to this lab's calibrated
+parameters. If you did Lab 2, every file here should look like a small delta from code
+you have already read.
 
 ## Frames and units
 
@@ -49,7 +51,7 @@ modules. Any leaf module can be read in isolation.
 
 | Module | Owns |
 |--------|------|
-| `lab_config.py` | Every tunable in one place: block size, tool offset, hover height, thresholds (`_RGB_DEFAULTS`, live-mutable), hardware (`ROBOT_IP`, `CAMERA_INDEX` — the only two values readable from environment variables), every `data/` filename, and `data_path()`. Imports nothing local. |
+| `lab_config.py` | Every tunable in one place: block size, tool offset, hover height, descent floor (`TABLE_Z_MM`), the wrist-flip guard (`IK_JUMP_DEG`), thresholds (`_RGB_DEFAULTS`, live-mutable), hardware (`ROBOT_IP`, `CAMERA_INDEX`, `JOINT_LIMITS_DEG` — the three values readable from environment variables), every `data/` filename, and `data_path()`. Imports nothing local. |
 | `reporting.py` | The one output grammar shared by every script: `banner`, `heading`, `field`, `progress`. Same as Lab 2. |
 | `units.py` | The single SDK↔maths crossing: `transform_from_pose_mm_rad`, `transform_from_pose_mm_deg`, `euler_deg_from_matrix`. |
 | `fk_lite6.py` | Modified (Craig) D-H forward kinematics for the Lite 6: `fk_from_zeta(q, zeta)` (zeta packed `[a\|alpha\|d\|theta_off]`, lengths in mm, angles in rad) and `pose_from_xyz_rpy` for cross-checking the controller's own pose readout. |
@@ -62,8 +64,8 @@ modules. Any leaf module can be read in isolation.
 | `ui_display.py` | Camera, OpenCV windows, calibration/data loaders, the RGB threshold trackbars, and the keygated display/wait loops. No geometry, no planning. |
 | `aruco_artifact_detector.py` | One camera frame → `T_C_W` by monocular PnP on the Lab 1/2 ArUco artifact (used during calibration capture). |
 | `handeye_gripper.py` | Stage 1 gripper calibration: one camera look at the artifact (`CAPTURE 1`) plus several touches on its top face (`CAPTURE 2`) measure the flange→cup distance `d`, from which the cup-tip frame G is built (`T_6_G`, `T_G_C = inv(T_6_G) @ T_6_C`). Writes `gripper_calibration.npy`. |
-| `key_control.py` | Key-gated final approach: the last millimetres from the hover point down to contact are driven by hand (`keygate_approach`), plus the cup-tip ↔ flange geometry helpers `flange_for_tip` / `tip_position`. |
-| `pick_and_place.py` | **Orchestrator only** — the keygated phase sequence (tune masks → choose profile → one-shot estimate → planned transit → keygated descent → vacuum pick → place on the red block) and top-level `run()`. Owns no geometry or hardware detail. |
+| `key_control.py` | The dead-man (g-gated) executors every motion phase runs through: `gated_path` (one `KEY_STEP_MM` position step per held-[g] frame) and `streamed_path` (servo poses every `STREAM_TICK_S`). Both pre-solve the whole path's IK — nothing moves if any pose fails, and a joint jump beyond `IK_JUMP_DEG` between consecutive steps (a wrist flip) rejects the move before anything moves — plus the cup-tip ↔ flange geometry helpers `flange_for_tip` / `tip_position`. (The reference copy also keeps the older `keygate_approach` jog, no longer called.) |
+| `pick_and_place.py` | **Orchestrator only** — the phase sequence (tune masks → choose profile and executor → one-shot estimate → vias → planned transit → keygated descent → vacuum pick → automatic lift → estimate of block 2 → transit → keygated seating → release → automatic retreat) and top-level `run()`. Each flight's executed path is written to `data/trajectories/` as a 3D plot and a CSV, with the via points marked. Owns no geometry or hardware detail. |
 
 ## data/ contents
 
@@ -74,6 +76,8 @@ modules. Any leaf module can be read in isolation.
 | `gripper_calibration.npy` | Stage-1 tool offset (flange→cup distance) from `handeye_gripper.py`. |
 | `aruco_config.json` | ArUco artifact definition for `aruco_artifact_detector.py`. |
 | `capture_log.json` | Log of the stored calibration captures. |
+| `mask_bands.json` | The RGB bands saved by the tuning session ([Enter] in the mask windows). |
+| `trajectories/` | Each flight's executed path: a 3D plot and a CSV, with the via points marked. |
 
 ## How to run
 
@@ -86,8 +90,9 @@ source .venv/bin/activate
 pip install numpy scipy opencv-python xarm-python-sdk pillow
 ```
 
-Open `src/lab_config.py` and check the hardware parameters; `ROBOT_IP` and `CAMERA_INDEX`
-can also be exported as environment variables on the bench (they have safe defaults).
+Open `src/lab_config.py` and check the hardware parameters; `ROBOT_IP`, `CAMERA_INDEX` and
+`JOINT_LIMITS_DEG` can also be exported as environment variables on the bench (they have
+safe defaults).
 
 Entry points (run from `Lab_3/src`):
 
@@ -103,5 +108,6 @@ python planners.py              # interpolator comparison self-test (no hardware
 Only `pick_and_place.py` and `handeye_gripper.py` need the arm and camera connected; all
 other modules import without hardware.
 
-Requires: Python 3.12+, NumPy 2.4.4, SciPy 1.17.1, OpenCV 4.13.0.92, xArm Python SDK 1.17.3,
-Pillow 12.2.0, and a reachable UFACTORY Lite 6 with wrist camera and vacuum gripper.
+Requires: Python 3.12+ and the pinned `requirements.txt` (NumPy 2.4.4, SciPy 1.17.1,
+OpenCV 4.13.0.92, xArm Python SDK 1.17.3, Pillow 12.2.0), and a reachable UFACTORY Lite 6
+with wrist camera and vacuum gripper.
