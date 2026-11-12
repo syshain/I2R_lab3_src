@@ -52,7 +52,8 @@ def _profile_quintic(s):
     """Quintic profile: zero velocity AND zero acceleration at both
     segment ends -- the gentlest start/stop of the three.
     (s in [0, 1]: see _profile_linear.)"""
-    return <TO_FILL>
+    raise NotImplementedError(
+        '_profile_quintic: the quintic easing polynomial (see the docstring)')
 
 
 INTERPOLATORS = {'linear': _profile_linear, 'cubic': _profile_cubic, 'quintic': _profile_quintic}

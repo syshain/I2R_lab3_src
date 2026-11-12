@@ -177,8 +177,14 @@ def main():
     _, corners_m = aruco_artifact_detector.load_artifact_config()
     obj = np.vstack([corners_m[int(mid)] for mid in entry['marker_ids']])
     img = np.asarray(entry['corners_px'], dtype=np.float64)
-    K = np.load(data_path('camera_matrix.npy'))
-    dist = np.load(data_path('dist_coeffs.npy'))
+    try:
+        K = np.load(data_path('camera_matrix.npy'))
+        dist = np.load(data_path('dist_coeffs.npy'))
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            'No camera calibration in data/ (%s) — copy your Lab 2 '
+            'camera_matrix.npy and dist_coeffs.npy into Lab_3/data/ first.'
+            % exc.filename) from exc
     report(solutions(obj, img, K, dist), "(capture-log entry %d)" % label)
 
 

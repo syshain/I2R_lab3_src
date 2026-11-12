@@ -1,0 +1,7 @@
+*.venv
+*.png
+*.jpg
+__*__
+*.MOV
+*trajectories*
+

@@ -24,8 +24,14 @@ _PREVIEW_PX = (960, 540)          # half-screen at 1920x1080
 
 def load_camera_intrinsics():
     """Load camera matrix and distortion coefficients."""
-    K = np.load(data_path(CAMERA_MATRIX_NAME))
-    dist = np.load(data_path(DIST_COEFFS_NAME))
+    try:
+        K = np.load(data_path(CAMERA_MATRIX_NAME))
+        dist = np.load(data_path(DIST_COEFFS_NAME))
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            'No camera calibration in data/ (%s) — copy your Lab 2 '
+            'camera_matrix.npy and dist_coeffs.npy into Lab_3/data/ first.'
+            % exc.filename) from exc
     return K, dist
 
 
@@ -37,7 +43,12 @@ def load_calibration_results():
     the calibration pipeline packs it — not Euler rpy.
     """
 
-    cal = np.load(data_path(RESULTS_NPY_NAME), allow_pickle=True).item()
+    try:
+        cal = np.load(data_path(RESULTS_NPY_NAME), allow_pickle=True).item()
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            'No calibration results in data/ (%s) — copy your Lab 2 '
+            'calibration_results.npy into Lab_3/data/ first.' % exc.filename) from exc
     use_nominal = os.environ.get('LAB3_ZETA', '').lower() == 'nominal'
     zeta = np.asarray(cal['zeta_nominal' if use_nominal else 'zeta_stage2'],
                       dtype=float)
