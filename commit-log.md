@@ -18,3 +18,7 @@ Working lab 3 code
 - key_control.py re-synced to Lab_3/src: priming tick, drain, settle poll and live q_rad refresh restored after the 11 Nov revert; streamed executors code-identical 
 - <TO_FILL> in planners._profile_quintic replaced with a NotImplementedError stub; key_control imports again
 - Camera/calibration loads guarded with a "copy your Lab 2 files into data/" message (ui_display, pnp_probe)
+
+# v3.1 - Planners stub removed
+## 12 Nov 2026
+- Removed quintic stub from planners.py
