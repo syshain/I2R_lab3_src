@@ -1,24 +1,16 @@
 """Via-point path planning between Cartesian poses.
 
-plan_via_path() turns a start pose, any number of via poses and an end
-pose into a dense list of poses that the executors in key_control.py
-walk through. Between consecutive key poses the position moves along a
-straight line and the orientation along the geodesic; a *profile*
-function shapes how the arm distributes its motion along that line:
+plan_via_path() turns a start pose, any number of via poses and an end pose
+into a dense list of poses the executors in key_control.py walk through.
+Between consecutive key poses the position moves along a straight line and
+the orientation along the geodesic; a *profile* function shapes how the
+motion is distributed along that line:
 
-    linear   constant speed: it never slows at a via, so velocity is
-             discontinuous there and the arm jolts under the dead-man
-             gate -- but the path is the shortest and the tracking is
-             the most even.
-    cubic    eases in and out of every key pose (zero velocity at both
-             segment ends), so the arm comes to a smooth stop at each
-             via.
-    quintic  eases yet more gently (zero velocity AND zero acceleration
-             at the segment ends).
+    linear   constant speed (velocity discontinuous at the vias)
+    cubic    zero velocity at each segment end
+    quintic  zero velocity AND acceleration at each segment end
 
-The lab exercise: run this file, compare the three profiles' total
-length and largest step, then watch the same paths on the real arm in
-each executor mode and connect what you see to the profiles.
+Run this file to compare the three profiles' total length and largest step.
 """
 
 import numpy as np
@@ -28,12 +20,8 @@ from so3 import rotation_log_map
 
 
 def _profile_linear(s):
-    """Constant-speed profile: velocity continuous through the segment
-    ends (the arm never stops at a via point), acceleration zero
-    everywhere. This is the profile for smooth g-gated tracking --
-    cubic and quintic ease to a full stop at every segment end and
-    crowd the waypoints there, which shows up as jolting under the
-    dead-man executor.
+    """Constant-speed profile: never stops at a via, acceleration zero
+    everywhere.
 
     All profiles map the normalised segment parameter s in [0, 1]
     (0 = start pose, 1 = end pose) to the distance fraction already
@@ -78,11 +66,9 @@ def rotation_exp_map(omega):
 def interpolate_pose(T0, T1, frac):
     """Pose a fraction `frac` of the way (in [0, 1]) from T0 to T1.
 
-    Orientation follows the geodesic (log/exp of the relative rotation),
-    position is linear in the frame of T0. `frac` has usually already
-    been shaped by one of the _profile_* functions, so the arm's SPEED
-    along the straight line varies with the profile even though the
-    geometric path does not.
+    Orientation follows the geodesic (log/exp of the relative rotation);
+    position is linear in the frame of T0. `frac` is usually already shaped
+    by a _profile_* function.
     """
     T = np.eye(4)
     d_ori = rotation_log_map(T0[:3, :3].T @ T1[:3, :3])

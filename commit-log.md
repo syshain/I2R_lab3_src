@@ -31,3 +31,9 @@ Working lab 3 code
 - PathRecorder buffers vias prompted before their segment opens, so they reach the saved plot
 - CAMERA_INDEX default 4 to 0 (JOINT_LIMITS_DEG already defaults to the bench limits 80..270)
 - docs/STRUCTURE.md synced with the reference copy's updated guide
+
+# v4.1 - Minor fixes
+## 13 Nov 2026
+- PathRecorder: vias always held until the next transit starts, so later flights label their own vias (not "lift"/"retreat")
+- Wrist-flip guard: first fine step compared against the arm's current joints; jump measured modulo 2pi so the +/-180 deg wrap is not read as a flip
+- handeye_gripper: touch spread uses sample std (ddof=1), matching the reference copy

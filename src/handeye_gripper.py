@@ -129,10 +129,10 @@ def _show_frozen(frame, status_line, info_lines, hint, marks, axes=None):
 def capture_artifact_pose(arm, cap, detector, zeta, T_6_C, p_top_A):
     """CAPTURE 1: camera looks at the stationary artifact -> (T_0_A, capture).
 
-    Several captures can be taken ([SPACE] each; move the wrist between them
-    so the views differ). The kept result is the capture whose top-face-centre
-    claim agrees best with the others, because one near-planar view can PnP to
-    a wildly wrong pose at a tiny reprojection error.
+    Several captures ([SPACE] each; move the wrist between views). The kept
+    result is the capture whose top-face-centre claim agrees best with the
+    others: one near-planar view can PnP to a wrong pose at tiny
+    reprojection.
     """
 
     caps = []          # accepted captures: {'T_0_A', 'capture', 'p_claim'}
@@ -331,7 +331,7 @@ def capture_touch(arm, zeta, T_0_A, p_top_A, n, p_face):
         if touches:
             d_all = np.array([t['d_mm'] for t in touches])
             info.append("d: mean %.2f mm   std %.2f mm   spread %.2f mm"
-                        % (d_all.mean(), d_all.std(), d_all.max() - d_all.min()))
+                        % (d_all.mean(), d_all.std(ddof=1), d_all.max() - d_all.min()))
         info.append("wrist tilt now: %.1f deg - any tilt is fine, avoid grazing" % tilt)
         info.append("flange-to-face-centre distance [mm]: %.0f"
                     % (np.linalg.norm(p_face - T_0_6[:3, 3]) * 1000.0))
@@ -384,7 +384,7 @@ def report_and_save(T_0_A, touches, p_top_A, T_6_C, capture):
 
     d_mm = np.array([t['d_mm'] for t in touches])
     d = float(d_mm.mean()) / 1000.0
-    d_std_mm = float(d_mm.std())
+    d_std_mm = float(d_mm.std(ddof=1))
     d_spread_mm = float(d_mm.max() - d_mm.min())
 
     T_6_G = np.eye(4)

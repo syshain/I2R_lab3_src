@@ -44,14 +44,11 @@ def tip_position(T_flange, tool_d_m):
 def _fine_plan(poses, q_rad, zeta, label, step_mm):
     """Subdivide planned poses into ~step_mm steps and pre-solve their IK.
 
-    Both executors share this: the whole path is tracked before anything
-    moves, so a plan that cannot be followed aborts with the arm untouched.
-    On IK failure the error is printed, with how many fine poses were
-    rejected by IK (the failed step and every step after it, which the
-    plan drops), and (None, None) is returned; otherwise (fine_poses,
-    plan), with plan[i] the joints for fine_poses[i]. A joint jump beyond
-    IK_JUMP_DEG between consecutive steps (a wrist flip) rejects the whole
-    move the same way, before anything has moved.
+    The whole path is tracked before anything moves, so an unfollowable plan
+    aborts with the arm untouched. IK failure, or a joint jump beyond
+    IK_JUMP_DEG between consecutive steps (a wrist flip), prints why and
+    returns (None, None); otherwise (fine_poses, plan), plan[i] for
+    fine_poses[i].
     """
 
     fine = []
@@ -78,14 +75,17 @@ def _fine_plan(poses, q_rad, zeta, label, step_mm):
                             rotation_log_map(T_end[:3, :3] @ T[:3, :3].T))),
                         err, len(fine) - i))
             return None, None
-        if plan:
-            jump_deg = float(np.max(np.abs(np.degrees(q_sol - plan[-1]))))
-            if jump_deg > IK_JUMP_DEG:
-                progress("! joint jump %.1f deg at %s step %d/%d (wrist flip)"
-                         " — move rejected, nothing moved; %d fine pose(s)"
-                         " rejected"
-                         % (jump_deg, label, i + 1, len(fine), len(fine) - i))
-                return None, None
+        # Joint angles wrap at +/-180 deg: compare modulo 2*pi so an
+        # equivalent solution on the other side of the wrap is not read
+        # as a flip.
+        jump_deg = float(np.max(np.abs(
+            np.degrees((q_sol - q_chain + np.pi) % (2.0 * np.pi) - np.pi))))
+        if jump_deg > IK_JUMP_DEG:
+            progress("! joint jump %.1f deg at %s step %d/%d (wrist flip)"
+                     " — move rejected, nothing moved; %d fine pose(s)"
+                     " rejected"
+                     % (jump_deg, label, i + 1, len(fine), len(fine) - i))
+            return None, None
         plan.append(q_sol)
         q_chain = q_sol
     return fine, plan
@@ -96,12 +96,11 @@ def gated_path(arm, cap, K, dist_coeffs, zeta, T_ee_cam, tool_d_m, q_rad,
                recorder=None, auto=False):
     """G-gated path execution: the arm moves ONLY while [g] is held down.
 
-    The planned poses are subdivided into KEY_STEP_MM steps with IK solved
-    before anything moves; each held frame advances one step, releasing
+    Each held frame advances one KEY_STEP_MM step (IK pre-solved); releasing
     [g] stops the motion at once. With allow_gripper, [SPACE] toggles the
-    vacuum (with a settle before further motion), and a successful toggle
-    ends the phase so the automatic liftoff/retreat can run. auto=True
-    runs the phase un-gated. Returns (q_rad, aborted, gripping).
+    vacuum and a successful toggle ends the phase so the automatic
+    liftoff/retreat runs. auto=True runs un-gated. Returns (q_rad, aborted,
+    gripping).
     """
 
     q_rad = np.asarray(q_rad, dtype=float).copy()
@@ -194,14 +193,11 @@ def streamed_path(arm, cap, K, dist_coeffs, zeta, T_ee_cam, tool_d_m, q_rad,
                   recorder=None, auto=False):
     """Mode-1 servo-streaming executor: same dead-man gate, smooth motion.
 
-    Like gated_path but in servo motion mode: pose ticks are streamed at a
-    fixed rate while [g] is held and the controller blends between them,
-    jolt-free, with no stop at each step. Releasing [g] pauses the stream;
-    the arm halts within one tick. [SPACE] is handled while the stream is
-    paused so only one thread talks to the arm; a successful toggle ends
-    the phase as in gated_path. Control returns to mode 0 on exit.
-    auto=True streams un-gated. Returns (q_rad, aborted, gripping).
-
+    Like gated_path but in servo mode: pose ticks stream while [g] is held
+    and the controller blends between them, jolt-free; releasing [g] pauses
+    the stream (halt within one tick). [SPACE] is handled while paused, so
+    only one thread talks to the arm; a successful toggle ends the phase as
+    in gated_path. Mode 0 restored on exit; auto=True streams un-gated.
     Returns (q_rad, aborted, gripping).
     """
 

@@ -1,11 +1,9 @@
 """pnp_probe - throw every PnP method at one capture's corner data.
 
-Reprojection error barely distinguishes poses for this artifact (a very flat
-error valley), so solvePnP can settle on a different valley point from every
-different view - tens of degrees and millimetres apart at nearly the same
-reprojection. This helper collects all the solutions the standard methods can
-find for one capture and reports whether several reproject almost equally
-well.
+Reprojection error barely distinguishes poses for this artifact (a flat
+error valley): solvePnP can settle far apart in pose at nearly the same
+reprojection. This helper collects the candidates and reports whether
+several reproject almost equally well.
 
 From the main script:   PNP_PROBE=1 python handeye_gripper.py
 Offline on the log:     python pnp_probe.py [entry_index]   (default: last)

@@ -64,10 +64,8 @@ def read_flange_pose_aa(arm):
 
     Returns [x, y, z] in millimetres + [wx, wy, wz] as an axis-angle vector
     in radians — exactly what stream_flange_pose takes. Used to prime the
-    servo stream: sending the controller's own pose once before the first
-    planned tick makes that tick a genuine small step from where the
-    controller really is, instead of a max-speed dash from wherever it
-    disagrees with our forward kinematics.
+    servo stream so the first planned tick is a small step from where the
+    controller really is.
     """
 
     code, pose = arm.get_position_aa(is_radian=True)
@@ -98,9 +96,8 @@ def stream_flange_pose(arm, mvpose, speed=STREAM_SPEED_MM_S):
 
     mvpose is [x, y, z, wx, wy, wz]: position in MILLIMETRES, orientation as
     an axis-angle vector in radians. The controller executes only the LAST
-    instruction received, so this must be called at a fixed rate
-    (key_control.streamed_path owns the pacing). speed is in mm/s. Returns
-    the SDK code.
+    instruction received, so call at a fixed rate (key_control.streamed_path
+    owns the pacing). speed is in mm/s. Returns the SDK code.
     """
 
     return arm.set_servo_cartesian_aa(mvpose, speed=speed, is_radian=True)

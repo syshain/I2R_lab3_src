@@ -1,13 +1,10 @@
 """Numerical inverse kinematics for the UFACTORY Lite 6, on top of fk_lite6.
 
-joint angles in radians, positions in metres.
-Targets are 4x4 flange transforms; the command line takes the
-controller's millimetres and degrees and converts them in units.py.
+Joint angles in radians, positions in metres; targets are 4x4 flange
+transforms (the command line takes mm + degrees, converted in units.py).
 
-    python3 ik_lite6.py                  self-test 
-    python3 ik_lite6.py X Y Z R P Y      solve one pose (mm, degrees) from rest
-    python3 ik_lite6.py X Y Z R P Y q1 ... q6
-                        solve from a starting guess, inside the joint box
+Usage: no args runs the self-test; X Y Z R P Y solves one pose (mm, deg)
+from rest; adding q1..q6 solves from that guess, inside the joint box.
 """
 
 import os

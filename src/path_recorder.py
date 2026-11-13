@@ -1,10 +1,9 @@
 """path_recorder — record the executed cup-tip path, then plot it in 3D.
 
-Segments are collected while pick_and_place.py runs (gated_path records the
-tip after every executed step; console vias are attached to the segment they
-belong to). At the end of the run save_path_plots writes one PNG (3D plot,
-vias drawn as larger open dots) plus a CSV of the raw points into
-TRAJECTORY_DIR, for the report.
+Segments are collected while pick_and_place.py runs (tip after every
+executed step; console vias attach to their segment). At the end of the run
+save_path_plots writes one PNG (vias as larger open dots) plus a CSV of the
+raw points into TRAJECTORY_DIR, for the report.
 """
 
 import os
@@ -39,14 +38,11 @@ class PathRecorder:
     def add_via(self, p_tip_m):
         """Record a console-entered via point (m, base frame).
 
-        Vias are prompted before the transit segment opens, so they wait
-        in _pending_vias until the next start_segment() claims them.
+        Vias are always held until the next start_segment() claims them,
+        so a via prompted between phases lands on the transit it belongs
+        to, not on the segment still open from the step before.
         """
-        p = np.asarray(p_tip_m, dtype=float) * 1000.0
-        if self._current is not None:
-            self._current['vias_mm'].append(p)
-        else:
-            self._pending_vias.append(p)
+        self._pending_vias.append(np.asarray(p_tip_m, dtype=float) * 1000.0)
 
     def has_data(self):
         return any(len(s['points_mm']) >= 1 for s in self.segments)

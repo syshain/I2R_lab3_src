@@ -1,20 +1,17 @@
 """Lab 3 stages 2-3: one-shot estimate -> planned transit -> g-gated motion.
 
-SAFETY GATE: nothing on the arm moves unless [g] is HELD DOWN. Each frame
-the key is held advances the arm one small step (KEY_STEP_MM); releasing it
-stops the motion immediately. [SPACE] starts (and stops) the vacuum pump
-while the arm is stood down during the descent/seating phases, [q] aborts.
-Two liftoffs run on their own once the vacuum is toggled: the post-pick
-lift starts automatically GRIPPER_SETTLE_S after [SPACE] engages the
-vacuum, and the post-seating retreat starts automatically after [SPACE]
-releases it, after which the arm is disabled. Both still abort on [q].
+SAFETY GATE: nothing on the arm moves unless [g] is HELD DOWN; each held
+frame advances one small step (KEY_STEP_MM) and releasing [g] stops the
+motion at once. [SPACE] toggles the vacuum while the arm is stood down
+during descent/seating; [q] aborts. Two liftoffs run automatically once the
+vacuum is toggled: the post-pick lift GRIPPER_SETTLE_S after [SPACE]
+engages it, and the post-seating retreat after [SPACE] releases it (then
+the arm is disabled). Both still abort on [q].
 
-One run of this script is the whole task: the flights before the descent
-end at an offer ([Enter] to carry on to the descent, [p] to plan another
-path with a fresh profile, executor and vias, [q] to finish the run), and
-the one-shot estimate offers another try ([e]) before it is accepted. [q]
-DURING a pre-descent flight aborts only that flight and returns to the
-offer; once the vacuum has engaged, [q] ends the run (the block is
+One run is the whole task: pre-descent flights end at an offer ([Enter]
+descend, [p] replan with a fresh profile/executor/vias, [q] finish) and the
+one-shot estimate offers another try ([e]). [q] mid-flight aborts only that
+flight; once the vacuum has engaged, [q] ends the run (the block is
 released, never dragged).
 """
 
@@ -54,9 +51,8 @@ LIFT_SPEED = 20             # % speed for the post-pick lift and retreat
 def choose_profile():
     """Ask which interpolator to use; default linear. Returns the key.
 
-    Linear keeps the velocity continuous through every segment end, so the
-    g-gated steps stay even; cubic/quintic ease to a full stop at each via
-    and crowd the waypoints there — the motion jolts under the dead-man
+    Linear keeps velocity continuous through the segment ends (even g-gated
+    steps); cubic/quintic stop at each via, which jolts under the dead-man
     executor.
     """
     names = sorted(INTERPOLATORS)
@@ -221,12 +217,8 @@ def do_transfer(arm, cap, K, dist, zeta, T_6_C, tool_d_m, color,
 
     executor is 'gated' or 'streamed' (choose_executor). Every pre-descent
     flight ends at an offer (see the module docstring): [Enter] descends,
-    [p] re-asks the profile and executor and flies another path (vias are
-    asked again either way), [q] finishes the run — one run covers Task 3's
-    several estimates and flights. With recorder
-    (path_recorder.PathRecorder), each executed segment's tip path is
-    recorded and the transit vias are attached to their segment for the
-    data/trajectories/ plots.
+    [p] replans, [q] finishes the run. With recorder, each segment's tip
+    path and vias are recorded for the data/trajectories/ plots.
     """
 
     def execute(q_in, poses, label, speed, allow_gripper=False,
@@ -234,10 +226,9 @@ def do_transfer(arm, cap, K, dist, zeta, T_6_C, tool_d_m, color,
                 auto=False):
         """One gated phase, run by the chosen executor.
 
-        streamed: descent/seating slow to STREAM_DESCENT_MM_S so the cup
-        approach stays gentle; everything else streams at
-        STREAM_SPEED_MM_S. gated keeps the caller's % speed. auto=True
-        passes through: the phase runs un-gated (post-vacuum liftoff).
+        streamed: descent/seating at STREAM_DESCENT_MM_S, the rest at
+        STREAM_SPEED_MM_S; gated keeps the caller's % speed. auto=True
+        runs un-gated (post-vacuum liftoff).
         """
         if executor == 'streamed':
             s_speed = (STREAM_DESCENT_MM_S
